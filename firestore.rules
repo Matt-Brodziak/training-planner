@@ -1,0 +1,13 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Each signed-in person can only ever see their own data.
+    match /users/{uid}/{col}/{docId} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      // The app writes plans, library and workouts.
+      // Sleep and sync status are written only by the Garmin sync function (server side).
+      allow write: if request.auth != null && request.auth.uid == uid
+                   && col in ['plans', 'library', 'workouts'];
+    }
+  }
+}
