@@ -61,7 +61,7 @@ test('full inputs: weighted score, labels and band', () => {
   assert.deepEqual(r.missing, []);
   assert.equal(r.components.sleep.label, '81');
   assert.equal(r.components.hrv.label, 'Balanced');
-  assert.equal(r.components.rhr.label, '+3 bpm');
+  assert.equal(r.components.rhr.label, '51 bpm · +3');
   assert.equal(r.components.sleepHistory.label, 'Fair');
   assert.equal(r.components.load.label, 'Optimal');
   assert.equal(r.components.load.value, 1);
@@ -94,8 +94,8 @@ test('no usable inputs returns null score', () => {
 test('labels for HRV, resting HR and load extremes', () => {
   assert.equal(computeReadiness({ hrv: { last: 40, baseline: 50 } }).components.hrv.label, 'Low');
   assert.equal(computeReadiness({ hrv: { last: 60, baseline: 50 } }).components.hrv.label, 'High');
-  assert.equal(computeReadiness({ rhr: { last: 46, baseline: 48 } }).components.rhr.label, '−2 bpm');
-  assert.equal(computeReadiness({ rhr: { last: 48, baseline: 48 } }).components.rhr.label, '±0 bpm');
+  assert.equal(computeReadiness({ rhr: { last: 46, baseline: 48 } }).components.rhr.label, '46 bpm · −2');
+  assert.equal(computeReadiness({ rhr: { last: 48, baseline: 48 } }).components.rhr.label, '48 bpm · ±0');
   assert.equal(computeReadiness({ load: { acute: 800, chronic: 1600 } }).components.load.label, 'Very high');
   assert.equal(computeReadiness({ load: { acute: 100, chronic: 1600 } }).components.load.label, 'Low');
   assert.equal(computeReadiness({ sleepHistory: [85, 90] }).components.sleepHistory.label, 'Good');

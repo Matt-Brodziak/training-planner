@@ -73,7 +73,7 @@ export function computeReadiness(inp = {}) {
   }
   if (inp.rhr && isNum(inp.rhr.last) && isNum(inp.rhr.baseline) && inp.rhr.last > 0 && inp.rhr.baseline > 0) {
     const delta = Math.round(inp.rhr.last - inp.rhr.baseline);
-    c.rhr = { value: Math.round(inp.rhr.last), baseline: Math.round(inp.rhr.baseline), delta, score: scoreRhr(delta), label: signed(delta) + ' bpm' };
+    c.rhr = { value: Math.round(inp.rhr.last), baseline: Math.round(inp.rhr.baseline), delta, score: scoreRhr(delta), label: `${Math.round(inp.rhr.last)} bpm · ${signed(delta)}` };
   }
   const hist = (inp.sleepHistory || []).filter(isNum);
   if (hist.length) {
