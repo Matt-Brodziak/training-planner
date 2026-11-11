@@ -18,13 +18,16 @@ training-planner/
 ├── firestore.indexes.json
 ├── .gitignore               ← keeps your .env out of git
 ├── public/                  ← the app (what Hosting serves)
-│   ├── index.html           ← the whole app: Home, Calendar, Dashboard, Library
+│   ├── index.html           ← the whole app: Today, Week, Calendar, Dashboard, Library
 │   ├── firebase-config.js   ← STEP 4: paste your Firebase web config here
 │   ├── manifest.webmanifest ← makes it installable on iPhone
 │   └── icon-192.png, icon-512.png, apple-touch-icon.png
 └── functions/               ← the backend
-    ├── index.js             ← scheduled + "Sync now" Garmin sleep sync
+    ├── index.js             ← scheduled + "Sync now" Garmin sync (sleep, HRV, resting HR, load)
     ├── garmin.js            ← Garmin Personal API calls
+    ├── readiness.js         ← readiness score (pure function) + readiness.test.js
+    ├── readinessStore.js    ← computes and caches readiness per day in Firestore
+    ├── scripts/seed-emulator.mjs ← fake data for local testing
     ├── test-garmin.mjs      ← optional: test your key locally
     ├── package.json
     └── .env.example         ← STEP 6: copy to .env and paste your user ID
@@ -93,16 +96,29 @@ From now on, sleep syncs automatically at **07:15 and 10:15** (SAST). The second
 
 ### 10. Put it on your iPhone
 1. Open `https://YOUR-PROJECT-ID.web.app` in **Safari** and tap **Share → Add to Home Screen**.
-2. Open it from the home screen and sign in once. The home-screen app keeps its own sign-in, separate from Safari. It opens on **Home**: today's workout, last night's sleep, your 7-night trend and the weather.
+2. Open it from the home screen and sign in once. The home-screen app keeps its own sign-in, separate from Safari. It opens on **Today**: your readiness score, today's workout and the weather. **Week** has the week's planned volume, sleep and remaining sessions.
 
 ## Everyday use
 - **Changing the app:** edit `public/index.html`, then run `firebase deploy --only hosting`. Your data is untouched.
 - **Changing the backend:** edit the files in `functions/`, then run `firebase deploy --only functions`.
 - **When your Garmin key expires:** Garmin emails you about a week before. Create a new key, run `firebase functions:secrets:set GARMIN_API_KEY` again, then **redeploy the functions** (`firebase deploy --only functions`) so they pick up the new value.
-- **Weather** comes from Open-Meteo, which needs no key. Location defaults to Stellenbosch. Change it in **Settings → Weather location**.
+- **Weather** comes from Open-Meteo, which needs no key. It uses your phone's location when you allow it, otherwise your home location (Stellenbosch by default; change it in **Settings → Home location**). Forecasts are cached for an hour.
+
+## Readiness score
+Worked out once a day after the morning Garmin sync and saved in Firestore (`readiness/{date}`). It mixes five things, each scored 0–100:
+last night's sleep score (25%), HRV against your 7-day baseline (25%), resting HR against your 7-day baseline (15%), the average sleep score of the last 3 nights (15%) and acute load, your 7-day load against your 28-day average (20%, best between 0.8 and 1.3).
+Load is worked out from the heart-rate zones of your Garmin activities (Edwards TRIMP: minutes in zone 1 × 1 up to zone 5 × 5), because Garmin's own training load isn't available through its Personal API. If there are no Garmin activities in the last 28 days, your planned workout durations are used instead. If something is missing, the others are re-weighted. The scoring lives in `functions/readiness.js`; run its tests with `cd functions && npm test`.
+
+## Trying changes locally (fake data, never your real account)
+1. `firebase emulators:start --only auth,firestore,hosting --project demo-training`
+2. In another terminal: `cd functions && npm run seed:emu`
+3. Open `http://localhost:5000/?emu` and tap **Sign in**.
+
+The `?emu` switch only works on localhost, so the deployed app always uses your real data.
 
 ## If something doesn't work
 - **Sleep shows "Garmin rejected the API key":** the key expired or was deleted. Repeat step 7.3 and redeploy.
+- **Readiness parts show “—”:** HRV and resting HR need at least 3 of the previous 7 days for a baseline, so run **Settings → Sync last 30 nights** once. If they're still blank, Garmin may have renamed a field: run `test-garmin.mjs` and compare with the `FIELD` names in `garmin.js`.
 - **Sleep syncs but stages or score are blank:** Garmin doesn't publish its sleep response format, so `garmin.js` reads the usual Garmin Connect field names. Run `test-garmin.mjs` and adjust `normaliseSleep()`, or share the printed field names with Claude.
 - **Can't sign in on iPhone:** check that `authDomain` in `firebase-config.js` is `YOUR-PROJECT-ID.web.app`, and that this domain is listed under **Authentication → Settings → Authorized domains**.
 - **Function logs:** Firebase console → Functions → Logs, or run `firebase functions:log`.

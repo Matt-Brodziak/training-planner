@@ -4,7 +4,8 @@ import { defineSecret, defineString } from 'firebase-functions/params';
 import { logger } from 'firebase-functions';
 import { initializeApp } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
-import { getToken, fetchDailySleep, normaliseSleep, GarminError } from './garmin.js';
+import { getToken, fetchDailySleep, normaliseSleep, fetchDailyMetrics, GarminError } from './garmin.js';
+import { computeAndStoreReadiness } from './readinessStore.js';
 import { createMcpHandler } from './mcp.js';
 
 initializeApp();
@@ -23,7 +24,10 @@ const REGION = 'europe-west1';
 const localDate = (d = new Date()) => new Intl.DateTimeFormat('en-CA', { timeZone: TZ }).format(d);
 const minusDays = (iso, n) => { const d = new Date(iso + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() - n); return d.toISOString().slice(0, 10); };
 
-async function syncSleep(days) {
+// Readiness needs a 7-day HRV / resting HR baseline and 28 days of load, so metrics always cover 29 days.
+const METRIC_DAYS = 29;
+
+async function syncGarmin(days) {
   const uid = OWNER_UID.value();
   if (!uid || uid.startsWith('PASTE')) throw new Error('OWNER_UID is not set in functions/.env');
   const userRef = db.collection('users').doc(uid);
@@ -40,9 +44,22 @@ async function syncSleep(days) {
       await userRef.collection('sleep').doc(date).set({ ...rec, date, syncedAt: FieldValue.serverTimestamp() });
       saved++;
     }
-    await metaRef.set({ lastSync: FieldValue.serverTimestamp(), lastError: null, lastSaved: saved }, { merge: true });
-    logger.info(`Garmin sleep sync: ${saved} nights saved, ${empty} without data`);
-    return { saved, empty };
+
+    // HRV, resting HR, stress and training load. A failing endpoint is logged, not fatal.
+    const from = minusDays(today, Math.max(days, METRIC_DAYS) - 1);
+    const { byDate, errors: metricErrors } = await fetchDailyMetrics(token, from, today);
+    const batch = db.batch();
+    for (const [date, m] of Object.entries(byDate)) {
+      const clean = Object.fromEntries(Object.entries(m).filter(([, v]) => v !== undefined));
+      batch.set(userRef.collection('metrics').doc(date), { ...clean, date, syncedAt: FieldValue.serverTimestamp() }, { merge: true });
+    }
+    await batch.commit();
+    if (metricErrors.length) logger.warn('Garmin metrics partly unavailable', metricErrors);
+
+    const readiness = await computeAndStoreReadiness(db, uid, today);
+    await metaRef.set({ lastSync: FieldValue.serverTimestamp(), lastError: null, lastSaved: saved, metricErrors }, { merge: true });
+    logger.info(`Garmin sync: ${saved} nights saved, ${empty} without data, ${Object.keys(byDate).length} days of metrics, readiness ${readiness.result.score ?? 'n/a'}${readiness.stored ? '' : ' (kept existing)'}`);
+    return { saved, empty, readiness: readiness.result.score ?? null };
   } catch (err) {
     const msg = err instanceof GarminError ? err.message : `Sync failed: ${err.message}`;
     await metaRef.set({ lastAttempt: FieldValue.serverTimestamp(), lastError: msg }, { merge: true });
@@ -52,9 +69,10 @@ async function syncSleep(days) {
 }
 
 // Runs every morning (and again mid-morning in case your watch synced late).
+// Each run syncs sleep and metrics, then computes today's readiness once (see readinessStore.js).
 export const garminDailySync = onSchedule(
   { schedule: '15 7,10 * * *', timeZone: TZ, region: REGION, secrets: [GARMIN_API_KEY] },
-  async () => { await syncSleep(3); }
+  async () => { await syncGarmin(3); }
 );
 
 // "Sync now" button in the app. Only you can call it.
@@ -66,7 +84,7 @@ export const garminSyncNow = onCall(
     }
     const days = Math.min(30, Math.max(1, Number(request.data?.days) || 8));
     try {
-      return await syncSleep(days);
+      return await syncGarmin(days);
     } catch (err) {
       throw new HttpsError('unavailable', err instanceof GarminError ? err.message : 'Garmin sync failed. Check the function logs in the Firebase console.');
     }

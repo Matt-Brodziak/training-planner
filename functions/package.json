@@ -3,9 +3,13 @@
   "private": true,
   "type": "module",
   "main": "index.js",
-  "engines": { "node": "22" },
+  "engines": {
+    "node": "22"
+  },
   "scripts": {
-    "test-garmin": "node test-garmin.mjs"
+    "test": "node --test readiness.test.js garmin.test.js",
+    "test-garmin": "node test-garmin.mjs",
+    "seed:emu": "node scripts/seed-emulator.mjs"
   },
   "dependencies": {
     "firebase-admin": "^13.0.0",
