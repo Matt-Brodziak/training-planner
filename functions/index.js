@@ -1,16 +1,19 @@
 import { onSchedule } from 'firebase-functions/v2/scheduler';
-import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { onCall, onRequest, HttpsError } from 'firebase-functions/v2/https';
 import { defineSecret, defineString } from 'firebase-functions/params';
 import { logger } from 'firebase-functions';
 import { initializeApp } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { getToken, fetchDailySleep, normaliseSleep, GarminError } from './garmin.js';
+import { createMcpHandler } from './mcp.js';
 
 initializeApp();
 const db = getFirestore();
 
 // Your Garmin personal API key lives in Google Secret Manager, never in code.
 const GARMIN_API_KEY = defineSecret('GARMIN_API_KEY');
+// The password Claude's connector must present. Also in Secret Manager, never in code.
+const MCP_TOKEN = defineSecret('MCP_TOKEN');
 // Your Firebase user ID (shown in the app under Settings). Set in functions/.env
 const OWNER_UID = defineString('OWNER_UID');
 
@@ -68,4 +71,11 @@ export const garminSyncNow = onCall(
       throw new HttpsError('unavailable', err instanceof GarminError ? err.message : 'Garmin sync failed. Check the function logs in the Firebase console.');
     }
   }
+);
+
+// Claude connector (MCP). Lets Claude read and write plans, workouts and the library.
+// The URL is public because Claude calls it from Anthropic's servers; every request must carry MCP_TOKEN.
+export const mcp = onRequest(
+  { region: REGION, secrets: [MCP_TOKEN], invoker: 'public', maxInstances: 2, timeoutSeconds: 60 },
+  createMcpHandler({ db, getUid: () => OWNER_UID.value(), getToken: () => MCP_TOKEN.value(), tz: TZ, log: logger })
 );
