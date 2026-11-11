@@ -118,7 +118,8 @@ The `?emu` switch only works on localhost, so the deployed app always uses your 
 
 ## If something doesn't work
 - **Sleep shows "Garmin rejected the API key":** the key expired or was deleted. Repeat step 7.3 and redeploy.
-- **Readiness parts show “—”:** HRV and resting HR need at least 3 of the previous 7 days for a baseline, so run **Settings → Sync last 30 nights** once. If they're still blank, Garmin may have renamed a field: run `test-garmin.mjs` and compare with the `FIELD` names in `garmin.js`.
+- **Readiness parts show “—”:** each sync fetches the last 29 days of HRV, resting HR and activities, so one **Sync now** is enough for the baselines (they need at least 3 of the previous 7 days). If a part is still blank, that data is missing in Garmin Connect, or Garmin renamed a field: run `test-garmin.mjs` and compare with the `FIELD` names in `garmin.js`.
+- **Readiness card says today's score isn't ready:** it's calculated by the 07:15 and 10:15 syncs. Tap **Sync now** to calculate it straight away.
 - **Sleep syncs but stages or score are blank:** Garmin doesn't publish its sleep response format, so `garmin.js` reads the usual Garmin Connect field names. Run `test-garmin.mjs` and adjust `normaliseSleep()`, or share the printed field names with Claude.
 - **Can't sign in on iPhone:** check that `authDomain` in `firebase-config.js` is `YOUR-PROJECT-ID.web.app`, and that this domain is listed under **Authentication → Settings → Authorized domains**.
 - **Function logs:** Firebase console → Functions → Logs, or run `firebase functions:log`.

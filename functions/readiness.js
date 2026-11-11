@@ -4,6 +4,9 @@
 // Each component is normalised to 0–100, then weighted. Missing components are dropped and the
 // remaining weights rescaled, so the score never fails because one input is missing.
 
+// Bump when the scoring or labels change, so a score already cached for today is recalculated on the next sync.
+export const VERSION = 2;
+
 export const WEIGHTS = { sleep: 0.25, hrv: 0.25, rhr: 0.15, sleepHistory: 0.15, load: 0.20 };
 export const ORDER = ['sleep', 'hrv', 'sleepHistory', 'rhr', 'load'];
 export const LABELS = { sleep: 'Sleep', hrv: 'HRV status', rhr: 'Resting HR', sleepHistory: 'Sleep history', load: 'Acute load' };

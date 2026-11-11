@@ -1133,6 +1133,8 @@ const RD_ORDER=['sleep','hrv','sleepHistory','rhr','load'];
 const RD_LABEL={sleep:'Sleep',hrv:'HRV status',rhr:'Resting HR',sleepHistory:'Sleep history',load:'Acute load'};
 const barColor = s => s>=70?'var(--good)':s>=40?'var(--fair)':'var(--poor)';
 const hm = d => pad(d.getHours())+':'+pad(d.getMinutes());
+// Resting HR text is built here from the stored numbers, so scores cached before a label change still read "44 bpm · −1".
+const rdLabel = (k,c) => k==='rhr'&&typeof c.value==='number'&&typeof c.delta==='number' ? `${c.value} bpm · ${c.delta>0?'+':c.delta<0?'−':'±'}${Math.abs(c.delta)}` : c.label;
 function gaugeSVG(score,color){
   const arc='M15 76A60 60 0 0 1 135 76';
   return `<svg class="gauge" viewBox="0 0 150 86" role="img" aria-label="Readiness ${score} out of 100">
@@ -1152,7 +1154,7 @@ function readinessCard(){
   if(!ok) return `<section class="hp">${head}<div class="empty" style="padding:12px 4px">${r&&r.date===today()?'Not enough Garmin data for a score yet.':'Today’s score isn’t ready yet. It’s worked out after your morning Garmin sync.'}</div>${syncFoot()}</section>`;
   const color=BAND_COLOR[r.band]||'var(--violet)', comps=r.components||{}, missing=(r.missing||[]).length;
   const tiles=RD_ORDER.map((k,i)=>{ const c=comps[k]; const wide=i===RD_ORDER.length-1&&RD_ORDER.length%2===1;
-    return `<div class="rd-c${wide?' wide':''}"><div class="row"><span>${RD_LABEL[k]}</span><b class="num">${c?esc(c.label):'—'}</b></div><div class="bar" role="img" aria-label="${RD_LABEL[k]} ${c?c.score+' out of 100':'no data'}"><i style="width:${c?c.score:0}%;background:${c?barColor(c.score):'transparent'}"></i></div></div>`; }).join('');
+    return `<div class="rd-c${wide?' wide':''}"><div class="row"><span>${RD_LABEL[k]}</span><b class="num">${c?esc(rdLabel(k,c)):'—'}</b></div><div class="bar" role="img" aria-label="${RD_LABEL[k]} ${c?c.score+' out of 100':'no data'}"><i style="width:${c?c.score:0}%;background:${c?barColor(c.score):'transparent'}"></i></div></div>`; }).join('');
   const notes=[missing?`Based on ${RD_ORDER.length-missing} of ${RD_ORDER.length} factors.`:'', comps.load&&comps.load.source==='planned'?'Load estimated from planned workouts.':''].filter(Boolean).join(' ');
   return `<section class="hp">${head}
     <div class="rd-top">${gaugeSVG(r.score,color)}<div><div class="rd-band" style="color:${color}">${esc(r.band)}</div><div class="rd-tip">${esc(r.suggestion)}</div></div></div>
